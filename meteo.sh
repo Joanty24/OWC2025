@@ -20,6 +20,39 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 RED='\033[0;31m'
 
+# --- Help ---
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+  echo -e "
+${BOLD}Usage:${RESET}
+  meteo [options] [city]
+
+${BOLD}Arguments:${RESET}
+  ${CYAN}city${RESET}          City name to get weather for (default: Reus)
+                Multi-word cities are supported (e.g. \"New York\")
+
+${BOLD}Options:${RESET}
+  ${CYAN}-h, --help${RESET}    Show this help message and exit
+
+${BOLD}Output:${RESET}
+  • Current conditions — temperature, feels like, humidity, wind,
+    clouds, visibility, pressure, UV index, sunrise & sunset
+  • Hourly forecast    — next 6 hours (temp + rain probability)
+  • Daily forecast     — next 5 days (min/max temp + rain probability)
+  All times are shown in the ${YELLOW}city's local timezone${RESET}.
+
+${BOLD}Examples:${RESET}
+  ${GREEN}meteo${RESET}               # weather for Reus (default)
+  ${GREEN}meteo Tokyo${RESET}         # weather for Tokyo
+  ${GREEN}meteo \"New York\"${RESET}    # weather for New York
+
+${BOLD}Configuration:${RESET}
+  API key is read from ${CYAN}config.sh${RESET} (same directory) or
+  ${CYAN}~/.config/meteo/config.sh${RESET} when installed via install.sh.
+  Get a free key at ${CYAN}https://openweathermap.org/api${RESET}
+"
+  exit 0
+fi
+
 # --- Variables ---
 city="${1:-Reus}"
 language="en"
