@@ -1,7 +1,15 @@
 #!/bin/bash
 
+# --- Paths & Config ---
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [[ "$SCRIPT_DIR" == "/usr/local/bin" ]] || [[ "$SCRIPT_DIR" == "/usr/bin" ]]; then
+  CONFIG_FILE="$HOME/.config/meteo/config.sh"
+else
+  CONFIG_FILE="$SCRIPT_DIR/config.sh"
+fi
+
 # Source the config file to get $API_KEY
-source "$(dirname "$0")/config.sh"
+source "$CONFIG_FILE" 2>/dev/null || true
 
 # API (for reference)
 # Geocoding: http://api.openweathermap.org/geo/1.0/direct?q={city name}&limit={limit}&appid={API key}
@@ -20,11 +28,29 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 RED='\033[0;31m'
 
+# --- Auth ---
+if [[ "$1" == "auth" ]]; then
+  if [[ -z "$2" ]]; then
+    echo -e "${RED}Error: API token is required.${RESET}"
+    echo "Usage: meteo auth [API token]"
+    exit 1
+  fi
+  
+  mkdir -p "$(dirname "$CONFIG_FILE")"
+  echo "export API_KEY=\"$2\"" > "$CONFIG_FILE"
+  echo -e "${GREEN}✅ API key saved to $CONFIG_FILE${RESET}"
+  exit 0
+fi
+
 # --- Help ---
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   echo -e "
 ${BOLD}Usage:${RESET}
   meteo [options] [city]
+  meteo auth [API token]
+
+${BOLD}Commands:${RESET}
+  ${CYAN}auth [token]${RESET}  Save the OpenWeatherMap API token to configuration
 
 ${BOLD}Arguments:${RESET}
   ${CYAN}city${RESET}          City name to get weather for (default: Reus)
@@ -81,10 +107,23 @@ wind_dir_arrow() {
   echo "${dirs[$idx]}"
 }
 
+# --- Check API Key ---
+if [[ -z "$API_KEY" ]]; then
+  echo -e "${RED}Error: API key is not configured.${RESET}"
+  echo -e "Please run ${BOLD}meteo auth [API token]${RESET} to configure it."
+  exit 1
+fi
+
 # --- Geocoding ---
 city_encoded=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$city")
 echo -e "${CYAN}🔍 Looking up ${BOLD}$city${RESET}${CYAN}...${RESET}"
-geo_response=$(curl -s "http://api.openweathermap.org/geo/1.0/direct?q=${city_encoded}&limit=1&appid=$API_KEY" | tee city.json)
+geo_response=$(curl -s "http://api.openweathermap.org/geo/1.0/direct?q=${city_encoded}&limit=1&appid=$API_KEY")
+
+if ! echo "$geo_response" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  geo_error=$(echo "$geo_response" | jq -r '.message // empty' 2>/dev/null)
+  echo -e "${RED}Error: Geocoding request failed${geo_error:+: $geo_error}${RESET}"
+  exit 1
+fi
 
 lat=$(echo "$geo_response" | jq -r '.[0].lat')
 lon=$(echo "$geo_response" | jq -r '.[0].lon')
@@ -97,7 +136,13 @@ if [ -z "$lat" ] || [ "$lat" == "null" ]; then
 fi
 
 # --- One Call API ---
-onecall_response=$(curl -s "https://api.openweathermap.org/data/3.0/onecall?lat=$lat&lon=$lon&exclude=$exclude&units=metric&lang=$language&appid=$API_KEY" | tee lastcall.json)
+onecall_response=$(curl -s "https://api.openweathermap.org/data/3.0/onecall?lat=$lat&lon=$lon&exclude=$exclude&units=metric&lang=$language&appid=$API_KEY")
+
+if ! echo "$onecall_response" | jq -e '.current and .hourly and .daily and .timezone' >/dev/null 2>&1; then
+  onecall_error=$(echo "$onecall_response" | jq -r '.message // empty' 2>/dev/null)
+  echo -e "${RED}Error: Weather request failed${onecall_error:+: $onecall_error}${RESET}"
+  exit 1
+fi
 
 # Timezone for city-local time display
 city_tz=$(echo "$onecall_response" | jq -r '.timezone')

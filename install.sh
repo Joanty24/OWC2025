@@ -4,7 +4,12 @@
 set -e
 
 INSTALL_DIR="/usr/local/bin"
-CONFIG_DIR="$HOME/.config/meteo"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if [ "$EUID" -ne 0 ]; then
+  echo "❌ Error: Please run the installer as root (e.g., sudo ./install.sh)"
+  exit 1
+fi
 
 echo "📦 Installing meteo..."
 
@@ -17,21 +22,11 @@ for dep in curl jq python3 bc; do
   fi
 done
 
-# Setup config
-mkdir -p "$CONFIG_DIR"
-if [ ! -f "$CONFIG_DIR/config.sh" ]; then
-  read -rp "🔑 Enter your OpenWeatherMap API key: " key
-  echo "export API_KEY=\"$key\"" > "$CONFIG_DIR/config.sh"
-  echo "✅ API key saved to $CONFIG_DIR/config.sh"
-else
-  echo "ℹ️  Config already exists at $CONFIG_DIR/config.sh"
-fi
-
-# Install script (rewrite config source path to use ~/.config/meteo/config.sh)
-sed "s|source \".*config.sh\"|source \"$CONFIG_DIR/config.sh\"|" meteo.sh \
-  > "$INSTALL_DIR/meteo"
+# Install script
+cp "$SCRIPT_DIR/meteo.sh" "$INSTALL_DIR/meteo"
 chmod +x "$INSTALL_DIR/meteo"
 
 echo ""
 echo "✅ meteo installed! Usage:"
+echo "   meteo auth [token] # set your API key first"
 echo "   meteo [city]       # e.g. meteo Tokyo"
